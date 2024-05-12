@@ -5,7 +5,7 @@ from pydub import AudioSegment
 import sounddevice as sd
 import sys
 
-CHUNK = 1024 
+CHUNK = 2048 
 
 song = AudioSegment.from_file("Moby Dick.wav")
 
@@ -20,19 +20,21 @@ if song.channels == 2:
 
 pygame.init()
 WIDTH = 1500;
-HEIGHT = 600;
+HEIGHT = 1000;
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
+MAX_HEIGHT = 0.8 * HEIGHT 
 
 def draw_spectrum(fft_array):
     screen.fill((0, 0, 0)) 
     heights = []
     max_fft = np.max(np.abs(fft_array))
     
-    max_index = int(15000 * CHUNK / RATE)
-    
-    for i in range(1, max_index): 
-        height = np.abs(fft_array[i]) / max_fft * HEIGHT  # normalize 
+    max_index = int(20000 * (CHUNK / RATE))   
+
+    for i in range(1, min(max_index, CHUNK)): 
+        height = np.abs(fft_array[i]) / max_fft * MAX_HEIGHT  # scale to MAX_HEIGHT
         x = int(np.log(i) / np.log(max_index) * WIDTH) 
+        pygame.draw.line(screen, (0, 255, 0), (x, HEIGHT), (x, HEIGHT - height))
         heights.append((x, HEIGHT - height))
     pygame.draw.lines(screen, (255, 0, 0), False, heights, 1) 
 
@@ -47,7 +49,7 @@ def draw_spectrum(fft_array):
     for i in range(1, 9):  # draw 8 labels
         freq = int(20 * np.exp(i / 8 * np.log((RATE / 2) / 20)))  
         label = font.render(str(freq) + " Hz", 1, (255, 255, 255)) 
-        screen.blit(label, (i / 8 * WIDTH, 580)) 
+        screen.blit(label, (i / 8 * WIDTH, HEIGHT - 20)) 
 
 # precompute FFT for each chunk
 fft_arrays = []
@@ -68,7 +70,7 @@ pygame.time.set_timer(pygame.USEREVENT, int(1000 * CHUNK / RATE))
 fft_index = 0
 
 slider_rect = pygame.Rect(50, 50, 200, 50)  
-slider_pos = 0.5  
+slider_pos = 1  
 dragging = False  
 
 while True:
@@ -78,8 +80,8 @@ while True:
 
             draw_spectrum(fft_arrays[fft_index])
             pygame.draw.rect(screen, (200, 200, 200), slider_rect)  
-            pygame.draw.circle(screen, (255, 0, 0), (slider_rect.left + int(slider_pos * slider_rect.width), slider_rect.centery), 20)  # draw the slider knob
-            chunk_label = font.render("CHUNK: " + str(CHUNK), 1, (255, 255, 255))
+            pygame.draw.circle(screen, (255, 0, 0), (slider_rect.left + int(slider_pos * slider_rect.width), slider_rect.centery), 20) 
+            chunk_label = font.render("Zoom: " + str(CHUNK), 1, (255, 255, 255))
             screen.blit(chunk_label, (slider_rect.centerx, slider_rect.top - 20))  
             pygame.display.flip()  # update the screen
             fft_index += 1
@@ -95,5 +97,6 @@ while True:
             slider_pos = (event.pos[0] - slider_rect.left) / slider_rect.width
             slider_pos = max(0, min(1, slider_pos))  
 
-            CHUNK = max(5, int(slider_pos * 2048))
+            CHUNK = max(7, int(slider_pos * 1024))
+            
 
