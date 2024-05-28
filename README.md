@@ -6,3 +6,5 @@ There was an attempt to change window or chunk in real time and other variables,
 
 In case the video cant be seen in the folder, a link to the youtube video:
 https://youtu.be/z5vTT22JlDQ
+
+The main script to run is "PygamUpdate.py"
