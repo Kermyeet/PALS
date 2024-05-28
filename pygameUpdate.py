@@ -2,14 +2,12 @@ import pygame
 import numpy as np
 from scipy.fftpack import fft
 from pydub import AudioSegment
-import sounddevice as sd
 import sys
 
-CHUNK = 1024 * 2 
+# Change CHUNK to a higher value for balanced out data, change to lower for more accurate but sporatic data
+CHUNK = 512 * 2
 
 song = AudioSegment.from_file("Moby Dick.wav")
-
-#song = song.set_frame_rate(44100)
 
 RATE = song.frame_rate
 
@@ -19,8 +17,8 @@ if song.channels == 2:
     song_array = song_array.reshape((-1, 2))
 
 pygame.init()
-WIDTH = 1500;
-HEIGHT = 1000;
+WIDTH = 1500
+HEIGHT = 1000
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 MAX_HEIGHT = 0.8 * HEIGHT 
 
@@ -63,7 +61,7 @@ for i in range(len(song_array) // CHUNK):
     else:
         fft_array = fft(data * window)  
     fft_arrays.append(fft_array)
-####################################################
+
 fft_hanning = []
 window = np.hanning(CHUNK)  # create a window
 for i in range(len(song_array) // CHUNK):
@@ -75,7 +73,7 @@ for i in range(len(song_array) // CHUNK):
     else:
         fft_array = fft(data * window)  
     fft_hanning.append(fft_array)
-####################################################
+
 fft_hamming = []
 window = np.hamming(CHUNK)  # create a window
 for i in range(len(song_array) // CHUNK):
@@ -87,7 +85,7 @@ for i in range(len(song_array) // CHUNK):
     else:
         fft_array = fft(data * window)  
     fft_hamming.append(fft_array)
-####################################################
+
 fft_blackman = []
 window = np.blackman(CHUNK)  # create a window
 for i in range(len(song_array) // CHUNK):
@@ -99,7 +97,7 @@ for i in range(len(song_array) // CHUNK):
     else:
         fft_array = fft(data * window)  
     fft_blackman.append(fft_array)
-####################################################
+
 fft_bartlett = []
 window = np.bartlett(CHUNK)  # create a window
 for i in range(len(song_array) // CHUNK):
@@ -111,7 +109,7 @@ for i in range(len(song_array) // CHUNK):
     else:
         fft_array = fft(data * window)  
     fft_bartlett.append(fft_array)
-####################################################
+
 def use_kaiser():
     global current_fft
     global current_window
@@ -142,7 +140,6 @@ def use_blackman():
     current_fft = fft_blackman
     current_window = 'Blackman'
 
-
 def text_objects(text, font):
     textSurface = font.render(text, True, (0,0,0))
     return textSurface, textSurface.get_rect()
@@ -171,14 +168,22 @@ def draw_text_box(screen, message, x, y, w, h, color):
 
 current_window = 'Kaiser'
 current_fft = fft_arrays
-# play the song and update the spectrum analyzer
-sd.play(song_array / np.max(np.abs(song_array)), RATE)
-pygame.time.set_timer(pygame.USEREVENT, int(1000 * CHUNK / RATE))  
-fft_index = 0
+volume = 1.0  # Volume level from 0 to 1
 
+# Initialize song playback and set up the timer
+song = pygame.mixer.Sound('Moby Dick.wav')
+chunk_duration_ms = int((CHUNK / RATE) * 1000)
+pygame.time.set_timer(pygame.USEREVENT, chunk_duration_ms)  
+song.play()
+
+fft_index = 0
 slider_rect = pygame.Rect(50, 50, 200, 50)  
 slider_pos = 1  
-dragging = False  
+dragging_zoom = False  
+
+volume_slider_rect = pygame.Rect(50, 120, 200, 50)  
+volume_pos = 1  
+dragging_volume = False  
 
 while True:
     for event in pygame.event.get():
@@ -190,21 +195,36 @@ while True:
             pygame.draw.circle(screen, (255, 0, 0), (slider_rect.left + int(slider_pos * slider_rect.width), slider_rect.centery), 20) 
             chunk_label = font.render("Zoom: " + str(CHUNK), 1, (255, 255, 255))
             screen.blit(chunk_label, (slider_rect.centerx, slider_rect.top - 20))  
+
+            pygame.draw.rect(screen, (200, 200, 200), volume_slider_rect)  
+            pygame.draw.circle(screen, (255, 0, 0), (volume_slider_rect.left + int(volume_pos * volume_slider_rect.width), volume_slider_rect.centery), 20) 
+            volume_label = font.render("Volume: " + str(round(volume * 100)) + "%", 1, (255, 255, 255))
+            screen.blit(volume_label, (volume_slider_rect.centerx, volume_slider_rect.top - 20))  
+
             pygame.display.flip()  # update the screen
-            fft_index += 1
+            fft_index = (fft_index + 1) % len(current_fft)
         elif event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if slider_rect.collidepoint(event.pos):
-                dragging = True
+                dragging_zoom = True
+            if volume_slider_rect.collidepoint(event.pos):
+                dragging_volume = True
         elif event.type == pygame.MOUSEBUTTONUP:
-            dragging = False
-        elif event.type == pygame.MOUSEMOTION and dragging:
-            slider_pos = (event.pos[0] - slider_rect.left) / slider_rect.width
-            slider_pos = max(0, min(1, slider_pos))  
-
-            CHUNK = max(7, int(slider_pos * 1024))
+            dragging_zoom = False
+            dragging_volume = False
+        elif event.type == pygame.MOUSEMOTION:
+            if dragging_zoom:
+                slider_pos = (event.pos[0] - slider_rect.left) / slider_rect.width
+                slider_pos = max(0, min(1, slider_pos))  
+                CHUNK = max(7, int(slider_pos * 1024))
+            if dragging_volume:
+                volume_pos = (event.pos[0] - volume_slider_rect.left) / volume_slider_rect.width
+                volume_pos = max(0, min(1, volume_pos))
+                volume = volume_pos
+                song.set_volume(volume)
+                
     draw_button(screen, 'Kaiser', 50 + 300, 50, 100, 50, (0,200,0), (0,255,0), use_kaiser)
     draw_button(screen, 'Hanning', 200 + 300, 50, 100, 50, (0,200,0), (0,255,0), use_hanning)    
     draw_button(screen, 'Hamming', 350 + 300, 50, 100, 50, (0,200,0), (0,255,0), use_hamming)  
@@ -213,4 +233,3 @@ while True:
     draw_text_box(screen, 'Current window: ' + current_window, 1200, 50, 200, 50, (200, 200, 200))
 
     pygame.display.flip()
-
